@@ -53,12 +53,13 @@ class TestAllOffCLI:
 
     def test_all_off_flag_exits_zero(self):
         """python -m posey_tube --all-off should exit 0 (or fail gracefully without lgpio)."""
+        repo_root = Path(__file__).resolve().parent.parent
         result = subprocess.run(
             [sys.executable, "-m", "posey_tube", "--all-off"],
             capture_output=True,
             text=True,
-            cwd="/root/wt/posey-deploy",
-            env={**os.environ, "POSEY_TUBE_CONFIG": "/root/wt/posey-deploy/deploy/config.example.toml"},
+            cwd=str(repo_root),
+            env={**os.environ, "POSEY_TUBE_CONFIG": str(DEPLOY_DIR / "config.example.toml")},
         )
         # In CI without lgpio, gpiozero fails with BadPinFactory (exit 1).
         # On a real Pi with lgpio, it exits 0.
