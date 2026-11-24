@@ -1,0 +1,51 @@
+# posey-tube configuration example
+# Copy to /etc/posey-tube/config.toml and edit.
+# Lines starting with # are comments.
+
+# Pin configuration: each pin is a table under [pins.<name>]
+# Name must be unique; BCM number must be unique; 0-27 allowed.
+# Reserved pins (0,1,2,3,14,15) are rejected (I2C/UART/EEPROM).
+
+[pins.relay1]
+# Example output: active-low relay module on BCM 17
+bcm = 17
+direction = "out"          # "out" or "in"
+active_high = false        # Relay boards are usually active-low
+max_on_s = 600             # Auto-off after 10 minutes (required for outputs)
+label = "Desk lamp relay"  # Optional human-readable label
+
+[pins.relay2]
+# Another output on BCM 22
+bcm = 22
+direction = "out"
+active_high = false
+max_on_s = 300
+label = "Fan relay"
+
+[pins.button]
+# Example input: button with pull-up on BCM 27
+bcm = 27
+direction = "in"
+pull = "up"                # "up", "down", or "none" (required for inputs)
+label = "Front door button"
+
+[pins.sensor]
+# Another input on BCM 23 with pull-down
+bcm = 23
+direction = "in"
+pull = "down"
+label = "Motion sensor"
+
+# Uncomment and edit to add more pins:
+# [pins.my_output]
+# bcm = 18
+# direction = "out"
+# active_high = true
+# max_on_s = 60
+# label = "My custom output"
+
+# [pins.my_input]
+# bcm = 24
+# direction = "in"
+# pull = "none"
+# label = "My custom input"
