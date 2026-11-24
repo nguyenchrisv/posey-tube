@@ -36,7 +36,26 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Secrets env path (default: POSEY_TUBE_SECRETS or /etc/posey-tube/secrets.env)",
     )
+    p.add_argument(
+        "--all-off",
+        action="store_true",
+        help="Turn all configured outputs off and exit (used by systemd ExecStopPost)",
+    )
     return p.parse_args()
+
+
+def _run_all_off(configs: list) -> int:
+    """Drive all configured outputs off and exit. Returns 0 on success."""
+    import asyncio
+    from .gpio import GPIOController
+
+    controller = GPIOController(configs)
+
+    async def _run():
+        await controller.all_off()
+
+    asyncio.run(_run())
+    return 0
 
 
 def main() -> int:
@@ -47,7 +66,19 @@ def main() -> int:
 
     args = _parse_args()
 
-    # Load config and token
+    # Handle --all-off flag first (doesn't need token/secrets)
+    if args.all_off:
+        try:
+            configs = load_config(args.config)
+        except ConfigError as e:
+            print(f"Configuration error: {e}", file=sys.stderr)
+            return 2
+        except Exception as e:
+            print(f"Unexpected error loading config: {e}", file=sys.stderr)
+            return 2
+        return _run_all_off(configs)
+
+    # Load config and token for normal server mode
     try:
         configs = load_config(args.config)
         token = load_token(args.secrets)
