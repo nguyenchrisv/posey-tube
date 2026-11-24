@@ -85,7 +85,7 @@ def configs():
 
 
 @pytest.fixture
-def controller(configs):
+def controller(configs, tmp_path):
     """Create a GPIOController with MockFactory and ensure locks are created."""
     try:
         from gpiozero.pins.mock import MockFactory
@@ -93,7 +93,7 @@ def controller(configs):
         from gpiozero import MockFactory
 
     factory = MockFactory()
-    ctrl = GPIOController(_make_configs(), pin_factory=factory)
+    ctrl = GPIOController(_make_configs(), pin_factory=factory, state_path=tmp_path / "state.json")
     # Trigger lock creation on the test loop
     import asyncio
     asyncio.run(ctrl._ensure_locks())
@@ -197,7 +197,7 @@ class TestOutputControl:
 
         asyncio.run(_run())
 
-    def test_active_high_false_on_drives_low(self, controller, mock_factory):
+    def test_active_high_false_on_drives_low(self, controller, mock_factory, tmp_path):
         """active_high=False: {'on': true} drives pin low."""
         try:
             from gpiozero.pins.mock import MockFactory
@@ -206,7 +206,7 @@ class TestOutputControl:
 
         factory = MockFactory()
         configs = _make_configs()
-        ctrl = GPIOController(configs, pin_factory=factory)
+        ctrl = GPIOController(configs, pin_factory=factory, state_path=tmp_path / "state.json")
         asyncio.run(ctrl._ensure_locks())
 
         async def _run():
@@ -218,7 +218,7 @@ class TestOutputControl:
         asyncio.run(_run())
         factory.close()
 
-    def test_active_high_false_off_drives_high(self, controller, mock_factory):
+    def test_active_high_false_off_drives_high(self, controller, mock_factory, tmp_path):
         try:
             from gpiozero.pins.mock import MockFactory
         except ImportError:
@@ -226,7 +226,7 @@ class TestOutputControl:
 
         factory = MockFactory()
         configs = _make_configs()
-        ctrl = GPIOController(configs, pin_factory=factory)
+        ctrl = GPIOController(configs, pin_factory=factory, state_path=tmp_path / "state.json")
         asyncio.run(ctrl._ensure_locks())
 
         async def _run():
@@ -238,7 +238,7 @@ class TestOutputControl:
         asyncio.run(_run())
         factory.close()
 
-    def test_active_high_true_on_drives_high(self, controller, mock_factory):
+    def test_active_high_true_on_drives_high(self, controller, mock_factory, tmp_path):
         """active_high=True: {'on': true} drives pin high."""
         try:
             from gpiozero.pins.mock import MockFactory
@@ -247,7 +247,7 @@ class TestOutputControl:
 
         factory = MockFactory()
         configs = _make_configs()
-        ctrl = GPIOController(configs, pin_factory=factory)
+        ctrl = GPIOController(configs, pin_factory=factory, state_path=tmp_path / "state.json")
         asyncio.run(ctrl._ensure_locks())
 
         async def _run():

@@ -93,13 +93,23 @@ async def _pin_write(request: web.Request) -> web.Response:
 
     has_on = "on" in body
     has_pulse = "pulse_ms" in body
+    has_enabled = "enabled" in body
 
     if has_on and has_pulse:
         return _json_error(422, "provide 'on' or 'pulse_ms', not both")
-    if not has_on and not has_pulse:
-        return _json_error(422, "body must contain 'on' (bool) or 'pulse_ms' (int)")
+    if has_enabled and (has_on or has_pulse):
+        return _json_error(422, "'enabled' must be sent alone")
+    if not has_on and not has_pulse and not has_enabled:
+        return _json_error(422, "body must contain 'on' (bool), 'pulse_ms' (int) or 'enabled' (bool)")
 
     try:
+        if has_enabled:
+            enabled = body["enabled"]
+            if not isinstance(enabled, bool):
+                return _json_error(422, "'enabled' must be a boolean")
+            state = await controller.set_enabled(name, enabled)
+            return web.json_response(state)
+
         if has_on:
             on = body["on"]
             if not isinstance(on, bool):
@@ -119,6 +129,8 @@ async def _pin_write(request: web.Request) -> web.Response:
         return _json_error(404, "unknown pin")
     except ValueError as e:
         return _json_error(409, str(e))
+    except PermissionError as e:
+        return _json_error(423, str(e))
     except Exception as e:
         _LOG.exception("Unexpected error on pin write")
         return _json_error(500, f"internal error: {e}")

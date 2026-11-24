@@ -171,7 +171,7 @@ class TestAllOff:
 class TestShutdown:
     """Shutdown turns outputs off (tested via controller.shutdown)."""
 
-    def test_shutdown_turns_outputs_off(self):
+    def test_shutdown_turns_outputs_off(self, tmp_path):
         from posey_tube.gpio import GPIOController
         from posey_tube.pins import PinConfig
 
@@ -185,7 +185,7 @@ class TestShutdown:
             PinConfig(name="led", bcm=17, direction="out", active_high=False, max_on_s=2),
             PinConfig(name="relay", bcm=22, direction="out", active_high=True, max_on_s=3),
         ]
-        ctrl = GPIOController(configs, pin_factory=factory)
+        ctrl = GPIOController(configs, pin_factory=factory, state_path=tmp_path / "state.json")
         # Manually turn on
         import asyncio
 

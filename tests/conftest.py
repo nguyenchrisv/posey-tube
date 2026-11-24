@@ -34,14 +34,20 @@ def configs():
     return [
         PinConfig(name="led", bcm=17, direction="out", active_high=False, max_on_s=2, label="LED"),
         PinConfig(name="btn", bcm=27, direction="in", pull="up", label="Button"),
-        PinConfig(name="relay", bcm=22, direction="out", active_high=True, max_on_s=3, label="Relay"),
+        PinConfig(name="relay", bcm=22, direction="out", active_high=True, max_on_s=3, label="Relay", enabled=False),
     ]
 
 
 @pytest.fixture
-def controller(mock_factory, configs):
+def state_path(tmp_path):
+    """Per-test state file path so tests never share persisted state."""
+    return tmp_path / "state.json"
+
+
+@pytest.fixture
+def controller(mock_factory, configs, state_path):
     """Create a GPIOController with MockFactory and ensure locks are created."""
-    ctrl = GPIOController(configs, pin_factory=mock_factory)
+    ctrl = GPIOController(configs, pin_factory=mock_factory, state_path=state_path)
     # Trigger lock creation on the test loop
     import asyncio
     asyncio.run(ctrl._ensure_locks())

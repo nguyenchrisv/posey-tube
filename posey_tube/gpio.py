@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 
 from gpiozero import DigitalInputDevice, DigitalOutputDevice
 
+from .state import load_disabled, save_disabled
+
 if TYPE_CHECKING:
     from .pins import PinConfig
 
@@ -24,6 +26,7 @@ class _PinState:
     device: DigitalOutputDevice | DigitalInputDevice
     since: float
     on: bool
+    enabled: bool
     # Timers for outputs
     max_on_timer: asyncio.TimerHandle | None = None
     pulse_timer: asyncio.TimerHandle | None = None
@@ -39,18 +42,31 @@ class GPIOController:
     - Auto-off timer per output (max_on_s)
     - pulse_ms turns on then off (capped at 10 000 ms)
     - All outputs off on shutdown
+    - Per-pin enable/disable (arm/disarm), persisted across restarts
     """
 
     def __init__(
         self,
         configs: list[PinConfig],
         pin_factory=None,
+        state_path=None,
     ) -> None:
         self._configs = {c.name: c for c in configs}
         self._states: dict[str, _PinState] = {}
         self._factory = pin_factory
         self._loop: asyncio.AbstractEventLoop | None = None
         self._start_time = time.monotonic()
+        self._state_path = state_path
+
+        # Resolve start-up enabled state: persisted state file wins over
+        # config defaults; missing/corrupt file → config defaults (warn).
+        persisted = load_disabled(state_path)
+        if persisted is not None:
+            disabled_at_start = persisted
+        else:
+            disabled_at_start = {c.name for c in configs if not c.enabled}
+            if any(not c.enabled for c in configs):
+                _LOG.info("No state file; using config enabled=false defaults")
 
         # Create devices
         for cfg in configs:
@@ -82,6 +98,7 @@ class GPIOController:
                 device=dev,
                 since=self._start_time,
                 on=on,
+                enabled=cfg.name not in disabled_at_start,
             )
             self._states[cfg.name] = state
 
@@ -96,6 +113,16 @@ class GPIOController:
             if st.lock is None:
                 st.lock = asyncio.Lock()
 
+    async def authorize_control(self, name: str, action: str) -> None:
+        """Authorization hook called before every control write.
+
+        Hook only: the default implementation allows everything. Future
+        PIN/authentication logic overrides or replaces this method — no
+        PIN logic lives here yet (per Christopher).
+        ``action`` is one of ``"on"``, ``"pulse"``, ``"enabled"``.
+        """
+        return None
+
     # ---- Public API ----
 
     async def get_all_states(self) -> list[dict]:
@@ -109,6 +136,7 @@ class GPIOController:
                     "name": name,
                     "direction": st.config.direction,
                     "on": on,
+                    "enabled": st.enabled,
                     "since": self._format_since(st.since),
                     "label": st.config.label,
                 }
@@ -126,6 +154,7 @@ class GPIOController:
             "name": name,
             "direction": st.config.direction,
             "on": on,
+            "enabled": st.enabled,
             "since": self._format_since(st.since),
             "label": st.config.label,
         }
@@ -138,6 +167,9 @@ class GPIOController:
             raise KeyError(name)
         if st.config.direction != "out":
             raise ValueError("pin is an input")
+        await self.authorize_control(name, "on")
+        if not st.enabled:
+            raise PermissionError("pin is disabled")
 
         async with st.lock:
             if st.on == on:
@@ -161,6 +193,9 @@ class GPIOController:
             raise KeyError(name)
         if st.config.direction != "out":
             raise ValueError("pin is an input")
+        await self.authorize_control(name, "pulse")
+        if not st.enabled:
+            raise PermissionError("pin is disabled")
 
         async with st.lock:
             self._set_device(st, True)
@@ -191,6 +226,44 @@ class GPIOController:
                     st.since = time.monotonic()
                 self._cancel_timers(st)
         return {"ok": True}
+
+    async def set_enabled(self, name: str, enabled: bool) -> dict:
+        """Enable (arm) or disable (disarm) a pin. Returns new state.
+
+        Disabling an output that is on turns it off first, then locks it.
+        Inputs can be disabled too: they keep reporting state, flagged
+        ``enabled: false``. The disabled set is persisted so a reboot
+        does not silently re-arm the pin.
+        """
+        await self._ensure_locks()
+        st = self._states.get(name)
+        if not st:
+            raise KeyError(name)
+        await self.authorize_control(name, "enabled")
+
+        async with st.lock:
+            if st.enabled == enabled:
+                return await self.get_state(name)
+
+            if not enabled and st.config.direction == "out" and st.on:
+                # Disabling an output that is on: turn it off first
+                self._set_device(st, False)
+                st.on = False
+                self._cancel_timers(st)
+
+            st.enabled = enabled
+            st.since = time.monotonic()
+
+        self._persist_disabled()
+        return await self.get_state(name)
+
+    def _persist_disabled(self) -> None:
+        """Write the current disabled set to the state file (best effort)."""
+        disabled = {name for name, st in self._states.items() if not st.enabled}
+        try:
+            save_disabled(disabled, self._state_path)
+        except OSError as e:
+            _LOG.error("Failed to persist state: %s", e)
 
     async def shutdown(self) -> None:
         """Turn all outputs off and cancel all timers; used on SIGTERM/SIGINT."""

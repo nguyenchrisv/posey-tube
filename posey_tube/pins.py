@@ -13,6 +13,8 @@ class PinConfig:
     pin is driven low when logically on (common for relay boards).
     ``max_on_s`` is required for outputs: the auto-off safety timer.
     ``pull`` is only meaningful for inputs: ``"up"``, ``"down"`` or ``"none"``.
+    ``enabled`` is the start-up arm/disarm state (default True); the
+    persisted state file overrides it after the first boot.
     """
 
     name: str
@@ -22,6 +24,7 @@ class PinConfig:
     max_on_s: int | None = None
     pull: str | None = None
     label: str = ""
+    enabled: bool = True
 
     @property
     def is_output(self) -> bool:
