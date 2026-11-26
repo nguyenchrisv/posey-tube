@@ -14,6 +14,7 @@ from aiohttp import web
 from .config import load_config, load_token, ConfigError, DEFAULT_CONFIG_PATH, DEFAULT_SECRETS_PATH
 from .api import create_app
 from .gpio import GPIOController
+from .state import state_path as resolve_state_path
 
 _LOG = logging.getLogger(__name__)
 
@@ -40,6 +41,11 @@ def _parse_args() -> argparse.Namespace:
         "--all-off",
         action="store_true",
         help="Turn all configured outputs off and exit (used by systemd ExecStopPost)",
+    )
+    p.add_argument(
+        "--state",
+        default=None,
+        help="State file path (default: POSEY_TUBE_STATE or /var/lib/posey-tube/state.json)",
     )
     return p.parse_args()
 
@@ -78,6 +84,8 @@ def main() -> int:
             return 2
         return _run_all_off(configs)
 
+    # Handle --state flag for normal server mode (needs state file but no token/secrets for now)
+    # Actually, normal server mode still needs token, just add state_path to controller
     # Load config and token for normal server mode
     try:
         configs = load_config(args.config)
@@ -89,7 +97,7 @@ def main() -> int:
         print(f"Unexpected error loading config: {e}", file=sys.stderr)
         return 2
 
-    controller = GPIOController(configs)
+    controller = GPIOController(configs, state_path=resolve_state_path(args.state))
     app = create_app(controller, token)
 
     # Ensure all outputs off on aiohttp cleanup (covers SIGTERM/SIGINT + normal shutdown)

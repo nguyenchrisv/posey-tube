@@ -104,6 +104,11 @@ def load_config(path: Path | None = None) -> list[PinConfig]:
         if not isinstance(label, str):
             raise ConfigError(f"Pin '{name}': label must be a string")
 
+        # enabled (optional, default True): start-up arm/disarm state
+        enabled = table.get("enabled", True)
+        if not isinstance(enabled, bool):
+            raise ConfigError(f"Pin '{name}': enabled must be a boolean")
+
         configs.append(
             PinConfig(
                 name=name,
@@ -113,6 +118,7 @@ def load_config(path: Path | None = None) -> list[PinConfig]:
                 max_on_s=max_on_s,
                 pull=pull if direction == "in" else None,
                 label=label,
+                enabled=enabled,
             )
         )
 
