@@ -6,7 +6,6 @@
 set -euo pipefail
 
 # --- Configuration ---
-PACKAGE_NAME="posey-tube"
 INSTALL_DIR="/opt/posey-tube"
 CONFIG_DIR="/etc/posey-tube"
 VENV_DIR="${INSTALL_DIR}/venv"
@@ -25,9 +24,9 @@ if [[ $EUID -ne 0 ]]; then
     die "This script must be run with sudo (e.g., sudo ./install.sh)"
 fi
 
-# Detect if we're on a Pi Zero W (optional check)
-if [[ ! -f /proc/device-tree/model ]] || ! grep -q "Raspberry Pi Zero" /proc/device-tree/model 2>/dev/null; then
-    log "WARNING: Not running on a Raspberry Pi Zero W. Proceeding anyway..."
+# Detect if we're on a Raspberry Pi (optional check)
+if ! grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
+    log "WARNING: Not running on a Raspberry Pi. Proceeding anyway..."
 fi
 
 log "Updating apt cache..."
@@ -62,9 +61,9 @@ fi
 log "Creating virtual environment with --system-site-packages..."
 sudo -u "${SERVICE_USER}" python3 -m venv --system-site-packages "${VENV_DIR}"
 
-log "Installing package in editable mode..."
-"${VENV_DIR}/bin/pip" install --quiet --upgrade pip
-"${VENV_DIR}/bin/pip" install --quiet -e "${INSTALL_DIR}[dev]"
+log "Installing package into the venv (as ${SERVICE_USER}, no dev extras)..."
+sudo -u "${SERVICE_USER}" "${VENV_DIR}/bin/pip" install --quiet --upgrade pip
+sudo -u "${SERVICE_USER}" "${VENV_DIR}/bin/pip" install --quiet --upgrade "${INSTALL_DIR}"
 
 log "Creating config directory..."
 mkdir -p "${CONFIG_DIR}"

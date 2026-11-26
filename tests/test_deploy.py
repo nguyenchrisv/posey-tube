@@ -65,3 +65,58 @@ class TestAllOffCLI:
         # On a real Pi with lgpio, it exits 0.
         # We accept either 0 (success) or 1 (expected failure in CI without lgpio).
         assert result.returncode in (0, 1), f"stderr: {result.stderr}"
+
+class TestServiceHardening:
+    """posey-tube #9: least-privilege unit that still reaches /dev/gpiochip*."""
+
+    unit = (DEPLOY_DIR / "posey-tube.service").read_text()
+
+    def _directives(self):
+        out = {}
+        for line in self.unit.splitlines():
+            line = line.strip()
+            if line and not line.startswith(("#", "[")) and "=" in line:
+                k, v = line.split("=", 1)
+                out.setdefault(k, []).append(v)
+        return out
+
+    def test_gpiochip_not_hidden(self):
+        d = self._directives()
+        assert d.get("PrivateDevices", ["no"]) == ["no"]
+        assert d.get("DevicePolicy") == ["closed"]
+        assert any("gpiochip" in v for v in d.get("DeviceAllow", []))
+
+    def test_no_capabilities(self):
+        d = self._directives()
+        assert d.get("CapabilityBoundingSet") == [""]
+        assert d.get("AmbientCapabilities", [""]) == [""]
+        assert "CAP_" not in self.unit
+
+    def test_memory_max_not_deprecated_limit(self):
+        d = self._directives()
+        assert "MemoryLimit" not in d
+        assert "MemoryMax" in d
+
+    def test_lgpio_workdir_writable(self):
+        d = self._directives()
+        assert d.get("Environment") == ["LG_WD=/run/posey-tube"]
+        assert d.get("RuntimeDirectory") == ["posey-tube"]
+        assert not d["WorkingDirectory"][0].startswith("/opt")
+
+
+class TestInstallScript:
+    """posey-tube #9: pip runs as the service user, prod install has no dev extras."""
+
+    script = (DEPLOY_DIR / "install.sh").read_text()
+
+    def test_pip_runs_as_service_user(self):
+        for line in self.script.splitlines():
+            if "/bin/pip" in line and not line.lstrip().startswith(("#", "log")):
+                assert line.lstrip().startswith('sudo -u "${SERVICE_USER}"'), line
+
+    def test_no_dev_extras_or_editable_in_prod(self):
+        assert "[dev]" not in self.script
+        assert "install --quiet -e" not in self.script
+
+    def test_no_unused_package_name(self):
+        assert "PACKAGE_NAME" not in self.script

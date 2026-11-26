@@ -8,7 +8,11 @@ Wants=network-online.target
 Type=simple
 User=posey-tube
 Group=gpio
-WorkingDirectory=/opt/posey-tube
+WorkingDirectory=/var/lib/posey-tube
+# lgpio creates its notification FIFOs in LG_WD (default: the cwd); keep them off the read-only /opt
+Environment=LG_WD=/run/posey-tube
+StateDirectory=posey-tube
+RuntimeDirectory=posey-tube
 EnvironmentFile=-/etc/posey-tube/secrets.env
 ExecStart=/opt/posey-tube/venv/bin/python -m posey_tube
 ExecStopPost=/opt/posey-tube/venv/bin/python -m posey_tube --all-off
@@ -19,18 +23,31 @@ StandardError=journal
 SyslogIdentifier=posey-tube
 
 # Hardening
+# GPIO goes through /dev/gpiochip* (group gpio). PrivateDevices=yes would hide those nodes
+# (DeviceAllow= can't add them back), so use a closed device policy instead.
+DevicePolicy=closed
+DeviceAllow=char-gpiochip rw
+CapabilityBoundingSet=
+AmbientCapabilities=
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
-PrivateDevices=yes
-DeviceAllow=/dev/gpiochip* rw
-DeviceAllow=/dev/gpiomem rw
-CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_SYS_RAWIO
-AmbientCapabilities=CAP_DAC_OVERRIDE CAP_SYS_RAWIO
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
 
 # Resource limits
-MemoryLimit=100M
+MemoryMax=100M
 CPUQuota=50%
 
 [Install]
